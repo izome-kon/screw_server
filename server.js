@@ -2,6 +2,7 @@ const app = require("./app");
 const dotenv = require("dotenv");
 const mongoose = require("mongoose");
 const http = require('http')
+const roomModel = require("./models/room.model");
 dotenv.config({ path: "./config.env" });
 
 const DB = process.env.MONGODB_URI;
@@ -18,9 +19,18 @@ var io = require("socket.io")(server)
 io.on('connection', (socket)=>{
   console.log('a user connected');
   onlineUsers++;
-  console.log("🚀 ~ io.on ~ onlineUsers:", onlineUsers)
 
   io.emit('onlineUsers',onlineUsers)
+
+  socket.on('createRoom', async (data)  => {
+    console.log("🚀 ~ socket.on ~ createRoom:", data)
+    const room = await roomModel.handelCreateRoomEvent(JSON.parse(data));
+    if(room) {
+      io.emit('new_room', room)
+    }
+  })
+
+
   socket.on('disconnect', () => {
     if(onlineUsers>0)
       onlineUsers --;

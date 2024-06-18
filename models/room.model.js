@@ -66,8 +66,31 @@ RoomSchema.statics.createRoom = async function (userId, maxPlayers, gamePoints, 
     return room;
 };
 
+RoomSchema.statics.handelCreateRoomEvent = async function (data) {
+
+    const user = await UserModel.findById(data.userId);
+    if (!user) {
+        throw new Error('User not found');
+    }
+    let room = await this.create({
+        name: `Room ${Date.now()}`,
+        players: [user._id],
+        maxPlayers: data.maxPlayers,
+        gameSettings: {
+            timeLimit: data.timeLimit,
+            isChatEnabled: data.isChatEnabled,
+            gamePoints: data.gamePoints,
+            isPrivate: data.isPrivate,
+        }
+    });
+    room = await this.findById(room._id).populate('players', 'email name avatar score');
+    console.log("🚀 ~ room:", room)
+
+    return room;
+}
+
 RoomSchema.statics.getRooms = async function () {
-    const rooms = await this.find().populate('players', 'email name avatar score');
+    const rooms = await this.find({'gameSettings.isPrivate': false}).sort({ createdAt: -1 }).populate('players', 'email name avatar score');
     return rooms;
 };
 
