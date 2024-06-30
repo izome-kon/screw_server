@@ -84,16 +84,37 @@ RoomSchema.statics.handelCreateRoomEvent = async function (data) {
         }
     });
     room = await this.findById(room._id).populate('players', 'email name avatar score');
-    console.log("🚀 ~ room:", room)
+    // console.log("🚀 ~ room:", room)
 
     return room;
 }
 
 RoomSchema.statics.getRooms = async function () {
-    const rooms = await this.find({'gameSettings.isPrivate': false}).sort({ createdAt: -1 }).populate('players', 'email name avatar score');
+    const rooms = await this.find({ 'gameSettings.isPrivate': false }).sort({ createdAt: -1 }).populate('players', 'email name avatar score');
     return rooms;
 };
 
+RoomSchema.statics.checkRoomExists = async function (roomId) {
+    const room = await this.findById(roomId).populate('players', 'email name avatar score');
+    return room;
+};
+
+RoomSchema.statics.handelLeaveRoomEvent = async function (roomId, userId) {
+    const room = await this.findById(roomId);
+    if (!room) {
+        throw new Error('Room not found');
+    }
+
+    room.players = room.players.filter(player => player.toString() !== userId);
+
+    if (room.players.length === 0) {
+        await room.remove();
+        return null;
+    } else {
+        await room.save();
+        return await this.findById(roomId).populate('players', 'email name avatar score');
+    }
+};
 
 RoomSchema.pre('save', function (next) {
     this.updatedAt = Date.now();
