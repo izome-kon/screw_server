@@ -6,10 +6,15 @@ const RoomSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
-    players: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-    }],
+    players: [
+        {
+            user: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: UserModel,
+            },
+            isReady: { type: Boolean, default: false },
+        }
+    ],
     maxPlayers: {
         type: Number,
         default: 4,
@@ -54,7 +59,7 @@ RoomSchema.statics.createRoom = async function (userId, maxPlayers, gamePoints, 
     }
     const room = await this.create({
         name: `Room ${Date.now()}`,
-        players: [user._id],
+        players: [{ user: user._id }],
         maxPlayers,
         gameSettings: {
             timeLimit: delayTime,
@@ -63,7 +68,7 @@ RoomSchema.statics.createRoom = async function (userId, maxPlayers, gamePoints, 
             isPrivate,
         }
     });
-    return room;
+    return {room, user};
 };
 
 RoomSchema.statics.handelCreateRoomEvent = async function (data) {
@@ -74,7 +79,7 @@ RoomSchema.statics.handelCreateRoomEvent = async function (data) {
     }
     let room = await this.create({
         name: `Room ${Date.now()}`,
-        players: [user._id],
+        players: [{ user: user._id }],
         maxPlayers: data.maxPlayers,
         gameSettings: {
             timeLimit: data.timeLimit,
@@ -83,19 +88,25 @@ RoomSchema.statics.handelCreateRoomEvent = async function (data) {
             isPrivate: data.isPrivate,
         }
     });
-    room = await this.findById(room._id).populate('players', 'email name avatar score');
-    // console.log("🚀 ~ room:", room)
-
+    room = await this.findById(room._id).populate('players.user', 'email name avatar score');
     return room;
 }
 
 RoomSchema.statics.getRooms = async function () {
-    const rooms = await this.find({ 'gameSettings.isPrivate': false }).sort({ createdAt: -1 }).populate('players', 'email name avatar score');
-    return rooms;
+    try {
+        const rooms = await this.find({ "gameSettings.isPrivate": false })
+            .sort({ createdAt: -1 })
+            .populate('players.user', "email name avatar score");
+
+        return rooms;
+    } catch (error) {
+        console.error("Failed to get rooms:", error);
+        throw new Error("Failed to get rooms");
+    }
 };
 
 RoomSchema.statics.checkRoomExists = async function (roomId) {
-    const room = await this.findById(roomId).populate('players', 'email name avatar score');
+    const room = await this.findById(roomId).populate('players.user', 'email name avatar score');
     return room;
 };
 
@@ -105,15 +116,24 @@ RoomSchema.statics.handelLeaveRoomEvent = async function (roomId, userId) {
         throw new Error('Room not found');
     }
 
-    room.players = room.players.filter(player => player.toString() !== userId);
+    room.players = room.players.filter(player => player.user.toString() !== userId);
 
     if (room.players.length === 0) {
         await room.remove();
         return null;
     } else {
         await room.save();
-        return await this.findById(roomId).populate('players', 'email name avatar score');
+        return await this.findById(roomId).populate('players.user', 'email name avatar score');
     }
+};
+
+RoomSchema.methods.setPlayerReady = async function (userId) {
+    const player = this.players.find(player => player.user.toString() === userId);
+    if (player) {
+        player.isReady = true;
+        await this.save();
+    }
+    return this.populate('players.user', 'email name avatar score');
 };
 
 RoomSchema.pre('save', function (next) {
