@@ -68,7 +68,7 @@ RoomSchema.statics.createRoom = async function (userId, maxPlayers, gamePoints, 
             isPrivate,
         }
     });
-    return {room, user};
+    return { room, user };
 };
 
 RoomSchema.statics.handelCreateRoomEvent = async function (data) {
