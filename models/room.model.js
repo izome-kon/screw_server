@@ -51,7 +51,41 @@ const RoomSchema = new mongoose.Schema({
     },
   },
   gameState: {
-    type: mongoose.Schema.Types.Mixed,
+    discardPile: [
+      {
+        id: { type: String },
+        value: { type: Number },
+        type: { type: String, enum: ["command", "normal"], required: false },
+        command: { type: String, required: false },
+      },
+    ],
+    deck: [
+      {
+        id: { type: String },
+        value: { type: Number },
+        type: { type: String, enum: ["command", "normal"], required: false },
+        command: { type: String, required: false },
+      },
+    ],
+    playerCards: {
+      type: Map,
+      of: [
+        {
+          id: { type: String },
+          value: { type: Number },
+          type: { type: String, enum: ["command", "normal"], required: false },
+          command: { type: String, required: false },
+        },
+      ],
+    },
+    currentDrawCard: {
+      id: { type: String },
+      value: { type: Number },
+      type: { type: String, enum: ["command", "normal"], required: false },
+      command: { type: String, required: false },
+    },
+    currentPlayer: { type: String },
+    status: { type: String, enum: ["playing", "paused", "ended"] },
     default: {},
   },
   saving: { type: Boolean, default: false },

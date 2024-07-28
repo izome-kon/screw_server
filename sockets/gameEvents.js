@@ -20,24 +20,6 @@ module.exports = (io, socket) => {
         throw new Error("Room not found");
       }
       const updatedRoom = await handlePlayerMove(io, room, userId, move);
-      console.log(
-        "🚀 ~ socket.on ~ startPlayerTurnTimerstartPlayerTurnTimerstartPlayerTurnTimer"
-      );
-
-      // إذا كان هناك مؤقت قديم، قم بإلغائه
-      if (room.gameState.timerId) {
-        clearTimeout(room.gameState.timerId);
-        room.gameState.timerId = null;
-      }
-
-      // بدء مؤقت جديد
-      startPlayerTurnTimer(io, updatedRoom);
-      console.log(
-        "🚀 ~ socket.on ~ startPlayerTurnTimerstartPlayerTurnTimerstartPlayerTurnTimer"
-      );
-      safeEmit(io.to(roomId), "player_moved", updatedRoom);
-      console.log("🚀 ~ socket.on ~ emit(player_moved:");
-
       if (isRoundOver(updatedRoom)) {
         safeEmit(io.to(roomId), "round_over", updatedRoom);
         // io.to(roomId).emit("round_over", updatedRoom);
@@ -51,11 +33,9 @@ module.exports = (io, socket) => {
       console.log("🚀 ~ socket.on ~ error:", error);
     }
   });
-
   socket.on("playerDraw", async (data) => {
     // Implement drawing logic here
     const { roomId, userId } = data;
-    console.log("🚀 ~ socket.on ~ data:", data);
 
     try {
       const room = await roomModel.findById(roomId);
@@ -63,12 +43,8 @@ module.exports = (io, socket) => {
         throw new Error("Room not found");
       }
       // room.gameState.curruntDrawCard = room.gameState.deck.pop();
-      console.log(
-        "🚀 ~ socket.on ~ room.gameState.curruntDrawCard:",
-        room.gameState.curruntDrawCard
-      );
 
-      await room.save();
+      // await room.save();
     } catch (error) {
       socket.emit("error", { message: error.message });
     }

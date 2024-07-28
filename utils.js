@@ -1,6 +1,7 @@
 const { v4: uuidv4 } = require("uuid");
 const fs = require("fs");
 const flatted = require("flatted");
+const roomModel = require("./models/room.model");
 const badWords = JSON.parse(
   fs.readFileSync("./json/bad-words-ar.json")
 ).badWords;
@@ -17,41 +18,51 @@ function filterMessage(message) {
 }
 
 async function startGame(io, room) {
-  room.gameState = initializeGameState(room.players);
-  startPlayerTurnTimer(io, room);
-  return room;
+  try {
+    room.gameState = initializeGameState(room.players);
+    await room.save();
+    startPlayerTurnTimer(io, room, false);
+    return room;
+  } catch (error) {
+    console.error("Error starting game:", error);
+    return room;
+  }
 }
 
-async function startPlayerTurnTimer(io, room) {
+let timeouts = {};
+
+async function startPlayerTurnTimer(io, room, isJustReset) {
   const currentPlayerId = room.gameState.currentPlayer;
-  console.log("🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀");
-  setTimeout(async () => {
-    room.gameState.currentPlayer = getNextPlayer(room, currentPlayerId);
 
-    if (!isGameOver(room)) {
-      io.to(room.id).emit("player_turn", room.gameState.currentPlayer);
-      console.log(
-        "🚀 ~ setTimeout ~ player_turn:",
-        room.gameState.currentPlayer
-      );
+  if (timeouts[room.id]) {
+    clearTimeout(timeouts[room.id]);
+    delete timeouts[room.id];
+  }
 
-      try {
-        if (!room.saving) {
-          room.saving = true;
-          await room.save();
-          room.saving = false;
-        }
-      } catch (error) {
-        console.error("Error saving room state:", error);
+  if (!isGameOver(room)) {
+    if (!isJustReset) {
+      room.gameState.currentPlayer = getNextPlayer(room, currentPlayerId);
+    }
+    io.to(room.id).emit("player_turn", room.gameState.currentPlayer);
+
+    timeouts[room.id] = setTimeout(async () => {
+      await startPlayerTurnTimer(io, room, false);
+    }, room.gameSettings.timeLimit * 1000);
+
+    try {
+      if (!room.saving) {
+        room.saving = true;
+        await room.save();
         room.saving = false;
       }
-
-      await startPlayerTurnTimer(io, room);
-    } else {
-      io.to(room.id).emit("game_over", room);
-      console.log("🚀 ~ setTimeout ~ game_over:");
+    } catch (error) {
+      console.error("Error saving room state:", error);
+      room.saving = false;
     }
-  }, room.gameSettings.timeLimit * 1000);
+  } else {
+    io.to(room.id).emit("game_over", room);
+    console.log("🚀 ~ setTimeout ~ game_over:");
+  }
 }
 
 function initializeGameState(players) {
@@ -61,12 +72,14 @@ function initializeGameState(players) {
     playerCards[player.user._id] = drawInitialCards(deck);
   });
   let discard = deck.pop();
+  console.log("🚀 ~ initializeGameState ~ deckAfterStart:", deck.length);
+
   return {
     discardPile: [discard],
     deck,
     playerCards,
     curruntDrawCard: null,
-    currentPlayer: "-1",
+    currentPlayer: players[0].id,
     status: "playing",
   };
 }
@@ -82,13 +95,41 @@ function shuffle(deck) {
 function createDeck() {
   const deck = [];
   let id = 1;
-  for (let i = 1; i <= 10; i++) {
+  for (let i = 1; i <= 6; i++) {
     for (let j = 0; j < 4; j++) {
       deck.push({ id: uuidv4(), value: i });
     }
   }
   for (let j = 0; j < 4; j++) {
     deck.push({ id: uuidv4(), value: 20, type: "command", command: "+20" });
+  }
+  for (let j = 0; j < 4; j++) {
+    deck.push({
+      id: uuidv4(),
+      value: 7,
+      type: "command",
+      command: "بص في ورقتك",
+    });
+    deck.push({
+      id: uuidv4(),
+      value: 8,
+      type: "command",
+      command: "بص في ورقتك",
+    });
+  }
+  for (let j = 0; j < 4; j++) {
+    deck.push({
+      id: uuidv4(),
+      value: 9,
+      type: "command",
+      command: "بص في ورقة غيرك",
+    });
+    deck.push({
+      id: uuidv4(),
+      value: 10,
+      type: "command",
+      command: "بص في ورقة غيرك",
+    });
   }
   for (let j = 0; j < 2; j++) {
     deck.push({
@@ -101,21 +142,25 @@ function createDeck() {
   for (let j = 0; j < 4; j++) {
     deck.push({ id: uuidv4(), value: 10, type: "command", command: "خد وهات" });
   }
-  deck.push({ id: uuidv4(), value: -1, type: "command", command: "-1" });
-  for (let j = 0; j < 5; j++) {
+  deck.push({ id: uuidv4(), value: -1, type: "normal", command: "-1" });
+  for (let j = 0; j < 2; j++) {
     deck.push({
       id: uuidv4(),
       value: 0,
-      type: "command",
+      type: "normal",
       command: "سكرو درايفر",
     });
   }
   for (let j = 0; j < 2; j++) {
-    deck.push({ id: uuidv4(), value: 25, type: "command", command: "سكرو" });
+    deck.push({ id: uuidv4(), value: 25, type: "normal", command: "سكرو" });
   }
   for (let j = 0; j < 2; j++) {
     deck.push({ id: uuidv4(), value: 10, type: "command", command: "بصرة" });
   }
+  deck.push({ id: uuidv4(), value: 10, type: "normal", command: "الحرامي" });
+  deck.push({ id: uuidv4(), value: 10, type: "command", command: "خد بس" });
+  deck.push({ id: uuidv4(), value: 10, type: "command", command: "بص وبدل" });
+  console.log("🚀 ~ createDeck ~ deck:", deck.length);
 
   return deck;
 }
@@ -125,30 +170,33 @@ function drawInitialCards(deck) {
 }
 
 async function handlePlayerMove(io, room, userId, move) {
-  console.log("🚀 ~ handlePlayerMove ~ handlePlayerMove:", handlePlayerMove);
-
   const { type, cardIndex, targetPlayerId } = move;
   let playerCards = room.gameState.playerCards[userId];
-
+  let isCommand = false;
   switch (type) {
     case "dropToTable":
       // console.log("🚀 ~ handlePlayerMove ~ type:", type);
 
       if (room.gameState.deck.length > 0) {
+        console.log(
+          "🚀 ~ handlePlayerMove ~ room.gameState.deck:",
+          room.gameState.deck.length
+        );
         const drawnCard = room.gameState.deck.pop();
+        console.log("🚀 ~ handlePlayerMove ~ drawnCard:", drawnCard);
+        isCommand = drawnCard.type === "command";
         room.gameState.discardPile.push(drawnCard);
         io.to(room.id).emit("player_move", {
           move,
           userId,
         });
+        await room.save();
       }
       break;
 
     case "swapCardWithDeck":
       const discardedCard = playerCards.splice(cardIndex, 1)[0];
       const tmp = room.gameState.deck.pop();
-      console.log("🚀 ~ handlePlayerMove ~ tmp:", tmp);
-
       playerCards.insert(cardIndex, tmp);
       room.gameState.discardPile.push(discardedCard);
       move["deckCardId"] = tmp.id;
@@ -178,13 +226,9 @@ async function handlePlayerMove(io, room, userId, move) {
     default:
       throw new Error("Invalid move type");
   }
-
+  // room.gameState.curruntPlayer = getNextPlayer(room, room.gameState.curruntPlayer)
   room.gameState.playerCards[userId] = playerCards;
-  console.log(
-    "room.gameState.playerCards[userId]",
-    room.gameState.playerCards[userId]
-  );
-  room.gameState.currentPlayer = getNextPlayer(room, userId);
+  room.gameState.currentPlayer = userId;
 
   try {
     if (!room.saving) {
@@ -196,7 +240,10 @@ async function handlePlayerMove(io, room, userId, move) {
     console.error("Error saving room state:", error);
     room.saving = false;
   }
-
+  console.log("🚀 ~ playerMove.deck:8", room.gameState.deck.length);
+  safeEmit(io.to(room.id), "player_moved", room);
+  // بدء مؤقت جديد
+  startPlayerTurnTimer(io, room, isCommand);
   return room;
 }
 
@@ -222,13 +269,9 @@ function handleCommandCard(io, room, userId, card, targetPlayerId) {
 }
 
 function getNextPlayer(room, currentPlayerId) {
-  const players = room.players.map((player) => player.user.id.toString("hex")); // تحويل Buffer إلى string إذا لزم الأمر
-  console.log("🚀 ~ getNextPlayer ~ players:", players); // التحقق من اللاعبين بعد التحويل
+  const players = room.players.map((player) => player.user.id.toString("hex"));
   const currentIndex = players.indexOf(currentPlayerId);
-  console.log("🚀 ~ getNextPlayer ~ currentPlayerId:", currentPlayerId); // التحقق من المعرف الحالي
-  console.log("🚀 ~ getNextPlayer ~ currentIndex:", currentIndex); // التحقق من الفهرس الحالي
   const nextPlayerId = players[(currentIndex + 1) % players.length];
-  console.log("🚀 ~ getNextPlayer ~ nextPlayerId:", nextPlayerId); // التحقق من المعرف التالي
   return nextPlayerId;
 }
 
@@ -243,13 +286,16 @@ function isGameOver(room) {
 function startTimer(io, roomId, countdownValue) {
   let countdown = countdownValue - 1;
 
-  const timerInterval = setInterval(() => {
+  const timerInterval = setInterval(async () => {
     if (countdown > 0) {
       io.to(roomId).emit("timer_update", { countdown });
       countdown--;
     } else {
       clearInterval(timerInterval);
       io.to(roomId).emit("timer_end");
+      const room = await roomModel.findById(roomId);
+      // بدء مؤقت جديد
+      startPlayerTurnTimer(io, room, false);
     }
   }, 1000);
 }

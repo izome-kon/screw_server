@@ -15,12 +15,18 @@ module.exports = (io, socket) => {
       const allPlayersReady = room.players.every((player) => player.isReady);
       if (allPlayersReady) {
         room.status = "in-game";
+
+        // Perform necessary actions to start the game
         const updatedRoom = await startGame(io, room);
-        await updatedRoom.save();
+        // Save the room status and emit the start_game event
+        // await updatedRoom.save();
         io.to(roomId).emit("start_game", updatedRoom);
+
+        // Start the game timer
         startTimer(io, roomId, room.gameSettings.timeLimit);
       }
     } catch (error) {
+      console.log("🚀 ~ socket.on ~ error:", error);
       socket.emit("error", { message: error.message });
     }
   });
